@@ -1935,6 +1935,13 @@ static void nfa_dm_disc_sm_idle (tNFA_DM_RF_DISC_SM_EVENT event,
             }
             /* Otherwise, deactivating when getting unexpected activation */
         }
+        else if (p_data->nfc_discover.status == NCI_STATUS_SEMANTIC_ERROR)
+        {
+            /* check any pending flags like NFA_DM_DISC_FLAGS_STOPPING or NFA_DM_DISC_FLAGS_DISABLING */
+            nfa_dm_disc_new_state (NFA_DM_RFST_IDLE);
+            /* check if need to restart discovery after resync discovery state with NFCC */
+            nfa_dm_start_rf_discover ();
+        }
         /* Otherwise, wait for deactivation NTF */
         break;
 
@@ -2113,6 +2120,14 @@ static void nfa_dm_disc_sm_w4_all_discoveries (tNFA_DM_RF_DISC_SM_EVENT event,
         nfa_dm_start_rf_discover ();
         break;
     case NFA_DM_RF_DISCOVER_NTF:
+        if(p_data->nfc_discover.result.protocol == NCI_PROTOCOL_UNKNOWN)
+        {
+            /* fix for p2p interop issues */
+            NFA_TRACE_DEBUG0("Unknown protocol - Restart Discovery");
+            /* after receiving unknown protocol, restart discovery */
+            NFC_Deactivate (NFA_DEACTIVATE_TYPE_IDLE);
+            return;
+        }
         /* if deactivate CMD is already sent then ignore discover NTF */
         if (!(nfa_dm_cb.disc_cb.disc_flags & NFA_DM_DISC_FLAGS_W4_RSP))
         {
@@ -2248,6 +2263,7 @@ static void nfa_dm_disc_sm_w4_host_select (tNFA_DM_RF_DISC_SM_EVENT event,
         break;
     default:
         NFA_TRACE_ERROR0 ("nfa_dm_disc_sm_w4_host_select (): Unexpected discovery event");
+        NFC_Deactivate (NFA_DEACTIVATE_TYPE_IDLE);
         break;
     }
 
